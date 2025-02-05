@@ -316,6 +316,10 @@ struct Arm{
     int pin;
     int channel;
 
+    #define RELAXED 0
+    #define POINTING 90
+    #define UPRIGHT 130
+
     Arm(){}
 
     void init(int pin, int ch){

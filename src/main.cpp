@@ -1,12 +1,28 @@
 #include <objects.h>
+#include <esp_adc_cal.h>
+
+//=====================================
+//Battery
+#define BAT_ADC 2
+#define CRITICAL_VOLTAGE 3.6
+
+float getVoltage(){
+    esp_adc_cal_characteristics_t adc_chars;
+    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_12, ADC_WIDTH_BIT_12, 1100, &adc_chars);
+
+    float voltage = (esp_adc_cal_raw_to_voltage(analogRead(BAT_ADC), &adc_chars))*2;
+    return voltage/1000.0;
+}
+
+//=====================================
 
 //PINS
 #define SERVOPIN 10
 #define BUZZERPIN 6
-#define POTPIN 2
+#define POTPIN 4
 #define DTPIN 5
 #define CLKPIN 7
-#define SWPIN 4
+#define SWPIN 9
 
 //===================================
 //ENCODER
@@ -41,11 +57,17 @@ void setup() {
 
 //===================================
 //MODE HANDLE
-String messages[] = {"Hola :D", "Sigue asi!", "No pares!", "TKM :)", "Juguemos?", "FOCUS!"};
+String messages[] = {
+    "Hola :D", "Sigue asi!", "No pares!",
+    "TKM :)", "Juguemos?", "FOCUS!",
+    "Persiste", "SLAY", "Cuenta conmigo",
+    "No pivote?", "Miedo al exito?", "Apunta alto"};
+
 int N_MESSAGES = sizeof(messages)/sizeof(messages[0]);
 
 // 0-Idle | 1-Timer | 2-Game | 3-Decision
 int CURRENT_MODE = 0;
+bool LOW_BATTERY = false;
 #define N_MODES 4
 
 struct Menu{
@@ -91,7 +113,7 @@ struct Menu{
 struct idleMode{
     unsigned long last_change = 0;
     unsigned long time_now = 0;
-    unsigned long random_delay = 5000;
+    unsigned long random_delay = 120000;
 
     bool first_boot = true;
     bool show_message = false;
@@ -205,6 +227,11 @@ struct timerMode{
     unsigned long time_now = 0;
     bool screen_on = true;
 
+    //Arms movement
+    unsigned long last_arm_move = 0;
+    #define ALARM_MOVE_DELAY 3000
+    bool arm_up = true;
+
 
     bool on_menu = false;
     String options[4] = {"Reanudar", "Ajustar", "Reiniciar", "Salir"};
@@ -274,6 +301,17 @@ struct timerMode{
         }
 
         time_now = get_time();
+
+        if(time_now-last_arm_move >= ALARM_MOVE_DELAY){
+            last_arm_move = time_now;
+
+            if(arm_up)
+                arm.move(UPRIGHT, 90);
+            else
+                arm.move(RELAXED, 90);
+
+            arm_up = !arm_up;
+        }
 
         //Beep
         if(time_now-last_change <= ALARM_DELAY)
@@ -349,7 +387,7 @@ struct gameMode{
     int r_pos = SCREEN_HEIGHT/2;
 
     //Ball
-    int cpu_speed = 2;
+    int cpu_speed = 3;
     int x_vel = 3;
     int y_vel = 3;
 
@@ -410,7 +448,7 @@ struct gameMode{
     }
 
 
-    int positions[4] = {0, 45, 90, 135};
+    int positions[4] = {RELAXED, (POINTING-RELAXED)/2, POINTING, UPRIGHT};
     void startMenuSelector(){
         int choice = startMenu.update();
         start_options[1] = "Dificultad ( " + String(cpu_speed) + " )";
@@ -512,15 +550,15 @@ struct gameMode{
             //Bot wins
             screen.showFace(HAPPY);
             speaker.celebrationBeep();
-            arm.move(180);
+            arm.move(UPRIGHT);
             speaker.celebrationBeep();
-            arm.move(0);
+            arm.move(RELAXED);
             screen.showFace(LOOK_LEFT);
             speaker.successBeep();
-            arm.move(90);
+            arm.move(POINTING);
             screen.showFace(LOOK_RIGHT);
             speaker.successBeep();
-            arm.move(0);   
+            arm.move(RELAXED);   
 
             //Show messages
             display.clearDisplay();
@@ -532,13 +570,13 @@ struct gameMode{
             //Bot losses
             screen.showFace(ANGRY);
             speaker.angryBeep();
-            arm.move(90);
+            arm.move(POINTING);
             speaker.angryBeep();
-            arm.move(0);
+            arm.move(RELAXED);
             speaker.angryBeep();
-            arm.move(180);
+            arm.move(UPRIGHT);
             screen.showFace(SAD);
-            arm.move(0);
+            arm.move(RELAXED);
             speaker.sadBeep();
 
             //Show message
@@ -569,7 +607,7 @@ struct gameMode{
 
         //Move generator
         int needs_move = random(1, 1001);
-        if(needs_move <= max(180*cpu_speed, 500)){
+        if(needs_move <= max(190*cpu_speed, 500)){
             if(r_pos + paddle_high < y_pos)
                 r_pos = constrain(r_pos+cpu_speed*2+1, 0, SCREEN_HEIGHT-paddle_high);
             else if(r_pos > y_pos)
@@ -577,7 +615,7 @@ struct gameMode{
         }
 
         //Write to servo
-        arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, 0, 180));
+        arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, RELAXED, UPRIGHT));
 
         // Check for ball bouncing into paddles:
         if (ball_on_right_paddle() || ball_on_left_paddle()){
@@ -752,9 +790,61 @@ timerMode timerScreen;
 gameMode gameScreen;
 decisionMode decisionScreen;
 
+
 //===================================
 
+struct lowBatteryMenu{
+    unsigned long time_now=0;
+    unsigned long last_warning=0;
+    unsigned long warning_delay = 180000;
+    bool first_time = true;
+
+    lowBatteryMenu(){}
+
+    void run(){
+        if(first_time){
+            display.clearDisplay();
+            screen.printCentered("Poca bateria :(");
+            screen.moveCursor(-1, display.getCursorY()+20);
+            screen.printCentered("( cargame )", 1, false);
+            display.display();
+            first_time = false;
+            speaker.sadBeep();
+        }
+
+        time_now = get_time();
+        if(time_now-last_warning<=warning_delay)
+            return;
+
+        last_warning = time_now;
+        speaker.sadBeep();
+
+    }
+
+};
+
+lowBatteryMenu lowBatteryScreen;
+//===================================
+
+float v;
 void loop(){
+    //Check battery
+    v = getVoltage();
+    if(v <= CRITICAL_VOLTAGE && !LOW_BATTERY){
+        LOW_BATTERY = true;
+        lowBatteryScreen.first_time = true;
+    }
+    else if(v >= CRITICAL_VOLTAGE && LOW_BATTERY)
+        LOW_BATTERY = false;
+    
+
+    if(LOW_BATTERY){
+        lowBatteryScreen.run();
+        delay(100);
+        return;
+    }
+
+    //Normal behaviour
     switch (CURRENT_MODE){
     case 0:
         idleScreen.run();
@@ -771,5 +861,6 @@ void loop(){
     default:
         break;
     }
+
     delay(20);
 }
