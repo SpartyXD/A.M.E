@@ -21,6 +21,10 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, 
 Servo pwm;
 #define MAX_ARDUINO_TIME 3294967295
 
+unsigned long get_time(){
+    return (millis()%MAX_ARDUINO_TIME);
+}
+
 //==========================================================
 
 struct Speaker{
@@ -177,7 +181,7 @@ struct Encoder{
 
     //Is switch pressed?
     bool isPressed(){
-        time_now = (millis() % MAX_ARDUINO_TIME);
+        time_now = get_time();
 
         if(time_now-last_check <= debounce)
             return false;
