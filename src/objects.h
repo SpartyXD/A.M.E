@@ -131,6 +131,9 @@ struct Screen{
     int centerY = 26;
     Speaker* spk;
 
+    const int CHAR_WIDTH = SCREEN_WIDTH/20;
+    const int CHAR_HEIGHT = SCREEN_HEIGHT/8;
+
     Screen(){}
 
     void init(Speaker &spk){
@@ -138,7 +141,6 @@ struct Screen{
         display.begin(i2c_Address, true); // Address 0x3C default
         display.clearDisplay();
         display.display();
-
         display.setTextSize(1);
         display.setTextColor(SH110X_WHITE);
         display.setCursor(0,0);
@@ -146,77 +148,79 @@ struct Screen{
     }
 
     void header(String title){
-        display.clearDisplay();
         display.setTextSize(1);
-        display.setCursor(centerX ,0);  display.print(title);
-        display.drawLine (0,9,128,9, SH110X_WHITE);  
+        display.setCursor(0, 0);
+        printCentered(title, 1, false);
+        display.drawLine (0,10,128,10, SH110X_WHITE);  
+    }
+
+    void moveCursor(int x=-1, int y=-1){
+        int new_x = (x != -1) ? x : display.getCursorX();
+        int new_y = (y != -1) ? y : display.getCursorY();
+        display.setCursor(new_x, new_y);
     }
 
     void loading_screen(){
         for(int i=0; i<=100; i+=20){
             display.clearDisplay();
-            display.setTextSize(1);
-            display.setCursor(centerX, centerY-15);
-            display.print("Loading...");
-
-            display.setTextSize(2);
-            if(i != 100)
-                display.setCursor(centerX+10, centerY);
-            else
-                display.setCursor(centerX+5, centerY);
-            display.print(String(i) + "%");
+            header("Cargando...");
+            display.setCursor(centerX-(String(i).length()*5)+15, centerY);
+            print(String(i), 2);
+            print("%", 2);
             display.display();
+
             delay(800);
         }
 
+        display.clearDisplay();
         printCentered("Hello :D");
+        display.display();
         spk->startupBeep();
         delay(1000);
     }
 
-    void print(String message){
-        display.clearDisplay();
-        display.setTextSize(1);
-        display.setCursor(0, 0); 
-
-        display.println(message);
-        display.display();
-    }
-
     //FIXME: Messages showing correctly (lenght)
-    void printCentered(String message){
-        display.clearDisplay();
-        display.setTextSize(1);
-        display.setCursor(centerX, centerY);
-
-        display.println(message);
-        display.display();
+    void print(String message, int sz=1){
+        display.setTextSize(sz);
+        display.print(message);
     }
 
-    //USE .DISPLAY AFTER XD
+    
+    void printCentered(String message, int sz=1, bool absolute=true){
+        int aux = max(0, int(message.length()-10));
+        if(absolute)
+            display.setCursor(max(0, int(centerX-(message.length()*2)+18-aux)), centerY);
+        else
+            display.setCursor(max(0, int(centerX-(message.length()*2)+18-aux)), display.getCursorY());
+
+        print(message, sz);
+    }
+
+
+    void printCenteredNumber(int number, int sz=2){
+        display.setTextSize(sz);
+        display.setCursor(centerX-(String(number).length()*5)+20, centerY);
+        display.print(number);
+    }
+
+
     void printCenteredTextNumber(String text, int number){
         display.clearDisplay();
-        display.setTextSize(1);
-        display.setCursor(centerX, centerY-15);
-        display.print(text);
-
-        display.setTextSize(2);
-        display.setCursor(centerX+13, centerY);
-        display.print(String(number));
-        display.setTextSize(1);
-
+        header(text);
+        printCenteredNumber(number);
         display.setCursor(0, 50);
     }
 
 
     void printClock(int seconds, String message="Focus time!", bool screen_on=true){
         //Status message
+        display.clearDisplay();
         header(message);
-        display.setCursor(centerX, centerY);
-        display.setTextSize(2);
 
-        if(screen_on)
-            display.print(format_time(seconds));
+        if(screen_on){
+            display.setCursor(centerX-5, centerY);
+            print(format_time(seconds), 2);
+        }
         
         display.display();
     }

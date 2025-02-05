@@ -41,7 +41,7 @@ void setup() {
 
 //===================================
 //MODE HANDLE
-String messages[] = {"Hola :D", "Sigue asi!", "No pares!", "\tTKM", "Juguemos?", "FOCUS!"};
+String messages[] = {"Hola :D", "Sigue asi!", "No pares!", "TKM :)", "Juguemos?", "FOCUS!"};
 int N_MESSAGES = sizeof(messages)/sizeof(messages[0]);
 
 // 0-Idle | 1-Timer | 2-Game | 3-Decision
@@ -50,6 +50,7 @@ int CURRENT_MODE = 0;
 
 struct Menu{
     int N_OPTIONS = 0;
+    int MAX_OPTIONS = 4;
     String* options;
 
     int current=0;
@@ -65,7 +66,7 @@ struct Menu{
         display.clearDisplay();
         display.setTextSize(1);
         int x = 0;
-        rep(i, N_OPTIONS){
+        for(int i=current/MAX_OPTIONS; i< min((current/MAX_OPTIONS)+MAX_OPTIONS, N_OPTIONS); i++){
             display.setCursor(0, x);
             if(i == current)
                 display.print("-> ");
@@ -108,6 +109,8 @@ struct idleMode{
     void updateRandom(){
         if(first_boot){
             first_boot = false;
+            idx = 0;
+            show_message = false;
             last_change = get_time();
             return;
         }
@@ -148,12 +151,18 @@ struct idleMode{
 
             //Easter eggs
             if(CURRENT_MODE == 2){
+                display.clearDisplay();
                 screen.printCentered("PONG");
+                display.display();
                 speaker.successBeep();
                 delay(800);
             }
-            else if(CURRENT_MODE = 3){
-                screen.printCentered("LET'S GO GAMBLING");
+            if(CURRENT_MODE == 3){
+                display.clearDisplay();
+                screen.moveCursor(15, screen.centerY);
+                screen.print("LET'S GO GAMBLING");
+                display.display();
+
                 speaker.gamblingBeep();
                 delay(50);    
                 speaker.gamblingBeep();
@@ -166,8 +175,11 @@ struct idleMode{
     void run(){
         if(!on_menu){
             updateRandom();
-            if(show_message)
+            if(show_message){
+                display.clearDisplay();
                 screen.printCentered(messages[idx]);
+                display.display();
+            }
             else
                 screen.showFace(idx);
         }
@@ -206,19 +218,31 @@ struct timerMode{
         menu.show();
 
         if(choice != -1){
-            if(choice == 0)
-                running = true; //Come back
-            else if(choice == 1)
+            if(choice == 0){
+                if(time_left > 0){
+                    running = true; //Come back
+                    setting = false;
+                }
+                else{
+                    setting = true;
+                    running = false;
+                }
+            }
+            else if(choice == 1){
                 setting = true; //Adjust
+                running = false;
+            }
             else if(choice == 2){
                 //Restart
                 time_left = 0;
                 setting = true;
+                running = false;
             }
             else{
                 CURRENT_MODE = 0; //back to idle
                 idleScreen.first_boot = true;
                 setting = true;
+                running = false;
             }
 
             on_menu = false;
@@ -304,7 +328,10 @@ struct timerMode{
         time_left = constrain(time_left-1, 0, MAX_TIMER_TIME);
         
         //Show clock
-        screen.printClock(time_left);
+        if(time_left > 300)
+            screen.printClock(time_left);
+        else
+            screen.printClock(time_left, "Queda poco!");
 
         //Time is up?
         if(time_left == 0)
@@ -383,6 +410,7 @@ struct gameMode{
     }
 
 
+    int positions[4] = {0, 45, 90, 135};
     void startMenuSelector(){
         int choice = startMenu.update();
         start_options[1] = "Dificultad ( " + String(cpu_speed) + " )";
@@ -406,7 +434,15 @@ struct gameMode{
                 idleScreen.first_boot = true;
             }
             on_menu = false;
-        }      
+        }   
+
+        //Random movements
+        time_now = get_time();
+        if(time_now-last_change > change_delay){
+            last_change = time_now;
+            int idx = random(4);
+            arm.move(positions[idx], 30);
+        }   
     }
 
 
@@ -425,11 +461,13 @@ struct gameMode{
 
         //Set out by diff
         paddle_high = max(20 - cpu_speed, 2);
-        x_vel = 2 + cpu_speed/2;
+        x_vel = 1 + cpu_speed;
         y_vel = x_vel;
 
         //Start screen
+        display.clearDisplay();
         screen.printCentered("A jugar :D");
+        display.display();
         speaker.successBeep();
         delay(800);
     }
@@ -456,14 +494,15 @@ struct gameMode{
 
         cpu_speed += encoder.getRotation();
         cpu_speed = constrain(cpu_speed, 0, MAX_DIF);
+
         screen.printCenteredTextNumber("Dificultad:", cpu_speed);
 
         //Easter egg
         if(cpu_speed == MAX_DIF){
-            display.setCursor(40, 50);
-            display.print("( INSANO )");
+            screen.moveCursor(screen.centerX-10, 50);
+            screen.print("( INSANO )");
         }
-
+        
         display.display();
     }
 
@@ -483,8 +522,10 @@ struct gameMode{
             speaker.successBeep();
             arm.move(0);   
 
-            //Show message
+            //Show messages
+            display.clearDisplay();
             screen.printCentered("TE GANEEE!");
+            display.display();
             delay(2500);
         }
         else{
@@ -501,7 +542,9 @@ struct gameMode{
             speaker.sadBeep();
 
             //Show message
+            display.clearDisplay();
             screen.printCentered("HAS GANADO!");
+            display.display();
             delay(2500);
         }
 
@@ -523,10 +566,15 @@ struct gameMode{
         l_pos = map(pot.getReading(), 0, 100, 0, SCREEN_HEIGHT-paddle_high);
 
         //cpu
-        if(r_pos + paddle_high < y_pos)
-            r_pos = constrain(r_pos+cpu_speed*2+1, 0, SCREEN_HEIGHT-paddle_high);
-        else if(r_pos > y_pos)
-            r_pos = constrain(r_pos-cpu_speed*2+1, 0, SCREEN_HEIGHT-paddle_high);
+
+        //Move generator
+        int needs_move = random(1, 1001);
+        if(needs_move <= max(180*cpu_speed, 500)){
+            if(r_pos + paddle_high < y_pos)
+                r_pos = constrain(r_pos+cpu_speed*2+1, 0, SCREEN_HEIGHT-paddle_high);
+            else if(r_pos > y_pos)
+                r_pos = constrain(r_pos-cpu_speed*2+1, 0, SCREEN_HEIGHT-paddle_high);
+        }
 
         //Write to servo
         arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, 0, 180));
@@ -586,30 +634,6 @@ struct gameMode{
     }
 
 
-    int positions[4] = {0, 45, 90, 135};
-    void start_menu(){
-        if(encoder.isPressed()){
-            start_game();
-            return;
-        }
-
-        screen.printCentered("PONG");
-
-        display.setCursor(0, 50);
-        display.print("Click = comenzar");
-        display.display();
-
-        //Random movements
-        time_now = get_time();
-        if(time_now-last_change > change_delay){
-            last_change = time_now;
-            int idx = random(4);
-            arm.move(positions[idx], 30);
-        }
-
-    }
-
-
     void ball_reset(bool left){
         //If left is true, then ball should launch from the left, otherwise launch from the right
         //Ball should launch at a random Y location and at a random Y velocity
@@ -631,17 +655,16 @@ struct gameMode{
     }
 
     bool ball_on_right_paddle(){
-        return(x_pos >= SCREEN_WIDTH-paddle_width-1 && y_pos >= r_pos && y_pos <= (r_pos + paddle_high));
+        return(x_pos+x_vel >= (SCREEN_WIDTH-paddle_width-1) && y_pos >= r_pos && y_pos <= (r_pos + paddle_high));
     }
 
     bool ball_on_left_paddle(){
-        return(x_pos <= paddle_width+1 && y_pos >= l_pos && y_pos <= (l_pos + paddle_high));
+        return(x_pos+x_vel <= paddle_width+1 && y_pos >= l_pos && y_pos <= (l_pos + paddle_high));
     }
 
 };
 
 
-//FIXME: Find and correct bug of menu always showing up
 struct decisionMode{
     bool setting_up = false;
     bool gambling = false;
@@ -675,8 +698,14 @@ struct decisionMode{
             gambling_menu();
         else if(setting_up)
             setting_up_menu();
-        else
-            screen.print("Levanta mi brazo\n derecho");
+        else{
+            display.clearDisplay();
+            screen.header("Decision maker");
+            screen.printCentered("Levanta mi");
+            screen.moveCursor(-1, display.getCursorY()+10);
+            screen.printCentered("Brazo derecho", 1, false);
+            display.display();
+        }
     }
 
 
@@ -685,7 +714,7 @@ struct decisionMode{
         choices = constrain(choices + p, 2, 99);
 
         screen.printCenteredTextNumber("Opciones:", choices);
-        display.print("Bajar brazo = elegir");
+        screen.print("Bajar brazo = elegir");
         display.display();
 
         gambling = pot.getReading() <= threshold;
@@ -707,8 +736,11 @@ struct decisionMode{
         //Calculate & show
         int number = random(1, choices+1);
         screen.printCenteredTextNumber("ELEGIDO:", number); 
+        screen.moveCursor(0, 50);
+        screen.printCentered("Click = continuar", 1, false);
         display.display();
-        delay(6000);
+        
+        while(!encoder.isPressed()){}
 
         gambling = false;
     }
