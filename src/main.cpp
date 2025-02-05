@@ -50,6 +50,12 @@ void loop(){
     if(encoder.isPressed())
         speaker.beep(750, 100);
     
-    screen.printCentered(String(i));
-    delay(20);
+    screen.printCentered("Ready?");
+    delay(1000);
+    
+    for(int idx=0; idx<N_FACES; idx++){
+        speaker.beep(700 + idx*20, 100);
+        screen.showFace(idx);
+        delay(1000);
+    }
 }

@@ -8,7 +8,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 
-//TODO: Add the methods to all objects and make first test
+#include <faces.h>
 
 //SCREEN
 #define i2c_Address 0x3c //initialize with the I2C addr 0x3C Typically eBay OLED's
@@ -77,11 +77,12 @@ struct Screen{
     }
 
 
-    // void showFace(int idx){
-    //     idx = constrain(idx, 0, N_FACES-1);
-    //     display.clearDisplay();
-    //     display.drawBitmap(0, 0, Caras[idx], 128, 64, SH110X_WHITE);
-    // }
+    void showFace(int idx){
+        idx = constrain(idx, 0, N_FACES-1);
+        display.clearDisplay();
+        display.drawBitmap(0, 0, Faces[idx], 128, 64, SH110X_WHITE);
+        display.display();
+    }
 
 
     void show(){
