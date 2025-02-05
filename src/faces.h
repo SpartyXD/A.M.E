@@ -412,5 +412,12 @@ const unsigned char* Faces[] = {
 
 const int N_FACES = sizeof(Faces)/sizeof(Faces[0]);
 
+//Faces idx
+#define IDLE 0
+#define LOOK_LEFT 1
+#define LOOK_RIGHT 2
+#define HAPPY 3
+#define ANGRY 4
+#define SAD 5
 
 #endif

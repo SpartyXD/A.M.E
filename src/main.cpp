@@ -19,28 +19,28 @@ void updateEncoder(){
 }
 
 //===================================
-
+//OBJECTS
 Screen screen;
 Arm arm;
 Speaker speaker;
 Encoder encoder;
 Potentiometer pot;
 
+//===================================
+
 void setup() {
-    screen.init();
-    arm.init(SERVOPIN, 0);
     speaker.init(BUZZERPIN, 2);
+    arm.init(SERVOPIN, 0);
+    screen.init(speaker);
     pot.init(POTPIN);
-    encoder.init(CLKPIN, DTPIN, SWPIN, encoderTurned, encoderDirection);
+    encoder.init(CLKPIN, DTPIN, SWPIN, encoderTurned, encoderDirection, speaker);
     attachInterrupt(digitalPinToInterrupt(CLKPIN), updateEncoder, CHANGE);
     
-    screen.printCentered("Hello :D");
-    speaker.beep(700, 100);
-    speaker.beep(900, 100);
-    delay(1000);
+    screen.loading_screen();
 }
 
 int i = 0;
+int idx = 0;
 void loop(){
     i += encoder.getRotation();
     int r = pot.getReading();
@@ -48,14 +48,6 @@ void loop(){
     arm.move(r);
 
     if(encoder.isPressed())
-        speaker.beep(750, 100);
-    
-    screen.printCentered("Ready?");
-    delay(1000);
-    
-    for(int idx=0; idx<N_FACES; idx++){
-        speaker.beep(700 + idx*20, 100);
+        idx = (idx+1) % N_FACES;
         screen.showFace(idx);
-        delay(1000);
-    }
 }

@@ -19,16 +19,41 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, 
 
 //Globals
 Servo pwm;
+#define MAX_ARDUINO_TIME 3294967295
 
 //==========================================================
 
+struct Speaker{
+    int pin = 0;
+    int channel = 0;
+
+    Speaker(){}
+
+    void init(int pin, int channel){
+        this->pin = pin;
+        this->channel = channel;
+        pinMode(pin, OUTPUT);    
+    }
+
+    void beep(unsigned int frec, unsigned int dur){
+        pwm.attach(pin, channel);
+        pwm.tone(pin, frec, dur);
+        delay(dur);
+        pwm.detach(pin);
+    }
+
+};
+
+
 struct Screen{
-    int centerX = 36;
+    int centerX = 42;
     int centerY = 26;
+    Speaker* spk;
 
     Screen(){}
 
-    void init(){
+    void init(Speaker &spk){
+        this->spk = &spk;
         display.begin(i2c_Address, true); // Address 0x3C default
         display.clearDisplay();
         display.display();
@@ -37,6 +62,30 @@ struct Screen{
         display.setTextColor(SH110X_WHITE);
         display.setCursor(0,0);
         delay(500);
+    }
+
+
+    void loading_screen(){
+        for(int i=0; i<=100; i+=20){
+            display.clearDisplay();
+            display.setTextSize(1);
+            display.setCursor(centerX, centerY-15);
+            display.print("Loading...");
+
+            display.setTextSize(2);
+            if(i != 100)
+                display.setCursor(centerX+10, centerY);
+            else
+                display.setCursor(centerX+5, centerY);
+            display.print(String(i) + "%");
+            display.display();
+            delay(800);
+        }
+
+        printCentered("Hello :D");
+        spk->beep(700, 100);
+        spk->beep(900, 100);
+        delay(1000);
     }
 
 
@@ -94,55 +143,56 @@ struct Screen{
         display.clearDisplay();
     }
 
-
-};
-
-
-struct Speaker{
-    int pin = 0;
-    int channel = 0;
-
-    Speaker(){}
-
-    void init(int pin, int channel){
-        this->pin = pin;
-        this->channel = channel;
-        pinMode(pin, OUTPUT);    
-    }
-
-    void beep(unsigned int frec, unsigned int dur){
-        pwm.attach(pin, channel);
-        pwm.tone(pin, frec, dur);
-        delay(dur);
-        pwm.detach(pin);
-    }
-
 };
 
 
 struct Encoder{
     int swpin, swState;
+    Speaker* spk;
 
     volatile bool* encoderTurned;
     volatile bool* encoderDirection; //True = right
 
+    //Debounce
+    unsigned long debounce = 50;
+    unsigned long last_check = 0;
+    unsigned long time_now = 0;
+    bool last_state = HIGH;
+
     Encoder(){}
 
 
-    void init(int clk, int dt, int sw, volatile bool &turned, volatile bool &dire){
+    void init(int clk, int dt, int sw, volatile bool &turned, volatile bool &dire, Speaker &spk){
         swpin = sw;
         encoderTurned = &turned;
         encoderDirection = &dire;
+        this->spk = &spk;
 
         pinMode(clk, INPUT);
         pinMode(dt, INPUT);
         pinMode(sw, INPUT_PULLUP);
+        last_state = digitalRead(sw);
+        last_check = millis();
     }
 
     //Is switch pressed?
     bool isPressed(){
+        time_now = (millis() % MAX_ARDUINO_TIME);
+
+        if(time_now-last_check <= debounce)
+            return false;
+
+        last_check = time_now;
         swState = digitalRead(swpin);
-        return (swState == LOW);
+
+        if(swState == LOW && last_state == HIGH){
+            spk->beep(700, 100);
+            last_state = LOW;
+            return true;
+        }
+
+        last_state = swState;
+        return false;
     }
 
     //-1 = left | 0 = still | 1 = right
