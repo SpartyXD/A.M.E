@@ -26,6 +26,26 @@ unsigned long get_time(){
     return (millis()%MAX_ARDUINO_TIME);
 }
 
+
+//Format from seconds to MM:SS
+String format_time(long seconds){
+    String ans = "";
+    //Calculate
+    int m = seconds/60;
+    int s = seconds - m*60;
+
+    if(m < 10)
+        ans += "0";
+    ans += String(m);
+
+    ans += ":";
+    
+    if(s < 10)
+        ans += "0";
+    ans += String(s);
+    return ans;
+}
+
 //==========================================================
 
 struct Speaker{
@@ -47,11 +67,35 @@ struct Speaker{
         pwm.detach(pin);
     }
 
+
+    void startupBeep(){
+        beep(700, 100);
+        beep(900, 100);
+    }
+
+    void actionBeep(){
+        beep(700, 100);
+    }
+
+    void alarmBeep(){
+        beep(1000, 200);
+        delay(100);
+        beep(800, 300);
+    }
+
+    void successBeep(){
+        beep(700, 100);
+        delay(50);
+        beep(1000, 100);
+        delay(50);
+        beep(1300, 100);
+    }
+
 };
 
 
 struct Screen{
-    int centerX = 42;
+    int centerX = 32;
     int centerY = 26;
     Speaker* spk;
 
@@ -72,7 +116,7 @@ struct Screen{
     void header(String title){
         display.clearDisplay();
         display.setTextSize(1);
-        display.setCursor(22,0);  display.print(title);
+        display.setCursor(centerX ,0);  display.print(title);
         display.drawLine (0,9,128,9, SH110X_WHITE);  
     }
 
@@ -94,8 +138,7 @@ struct Screen{
         }
 
         printCentered("Hello :D");
-        spk->beep(700, 100);
-        spk->beep(900, 100);
+        spk->startupBeep();
         delay(1000);
     }
 
@@ -110,30 +153,16 @@ struct Screen{
     }
 
 
-    void printClock(int seconds, String message="Focus time!"){
-        //Calculate
-        int m = seconds/60;
-        int s = seconds - m*60;
-
+    void printClock(int seconds, String message="Focus time!", bool screen_on=true){
         //Status message
-        display.clearDisplay();
-        display.setTextSize(1);
-        display.setCursor(32, 6);
-
-        display.println(message);
+        header(message);
         display.setCursor(centerX, centerY);
         display.setTextSize(2);
 
-        //Format
-        if(m < 10)
-            display.print("0");
-        display.print(m);
-
-        display.print(":");
+        if(screen_on)
+            display.print(format_time(seconds));
         
-        if(s < 10)
-            display.print("0");
-        display.println(s);
+        display.display();
     }
 
 
@@ -197,7 +226,7 @@ struct Encoder{
         swState = digitalRead(swpin);
 
         if(swState == LOW && last_state == HIGH){
-            spk->beep(700, 100);
+            spk->actionBeep();
             last_state = LOW;
             return true;
         }
