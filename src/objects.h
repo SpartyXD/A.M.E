@@ -193,7 +193,7 @@ struct Screen{
         display.display();
     }
 
-
+    //USE .DISPLAY AFTER XD
     void printCenteredTextNumber(String text, int number){
         display.clearDisplay();
         display.setTextSize(1);
