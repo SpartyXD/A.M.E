@@ -91,11 +91,18 @@ struct Speaker{
         beep(1300, 100);
     }
 
+    void gamblingBeep(){
+        beep(700, 100);
+        delay(50);
+        beep(1000, 100);
+        delay(200);
+    }
+
 };
 
 
 struct Screen{
-    int centerX = 32;
+    int centerX = 42;
     int centerY = 26;
     Speaker* spk;
 
@@ -142,7 +149,16 @@ struct Screen{
         delay(1000);
     }
 
+    void print(String message){
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setCursor(0, 0); 
 
+        display.println(message);
+        display.display();
+    }
+
+    //FIXME: Messages showing correctly (lenght)
     void printCentered(String message){
         display.clearDisplay();
         display.setTextSize(1);
@@ -150,6 +166,21 @@ struct Screen{
 
         display.println(message);
         display.display();
+    }
+
+
+    void printCenteredTextNumber(String text, int number){
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setCursor(centerX, centerY-15);
+        display.print(text);
+
+        display.setTextSize(2);
+        display.setCursor(centerX+13, centerY);
+        display.print(String(number));
+        display.setTextSize(1);
+
+        display.setCursor(0, 50);
     }
 
 

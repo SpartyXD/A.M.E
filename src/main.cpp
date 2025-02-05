@@ -161,6 +161,8 @@ struct idleMode{
     }
 };
 
+idleMode idleScreen;
+
 
 struct timerMode{
     bool running = false;
@@ -200,6 +202,7 @@ struct timerMode{
             }
             else{
                 CURRENT_MODE = 0; //back to idle
+                idleScreen.first_boot = true;
                 setting = true;
             }
 
@@ -318,10 +321,12 @@ struct gameMode{
     }
 };
 
+
 struct decisionMode{
-    int choices = 2;
-    bool setting_up = true;
+    bool setting_up = false;
+    bool gambling = false;
     int threshold = 50;
+    int choices = 2;
 
     /*
     Main idea: Lift up the potentiometer arm and once ready
@@ -330,38 +335,67 @@ struct decisionMode{
     the selected number will appear on screen until arm is lifted up again for more
     gambling
     */
-
-    bool on_menu = false;
-    String options[N_MODES] = {"Volver", "Timer", "Pong", "Gambling"};
-    Menu menu;
     
-    decisionMode(){menu.init(4, options);}
-
-    void menuSelector(){
-        int choice = menu.update();
-        menu.show();
-
-        if(choice != -1){
-            //DO STUFF
-            on_menu = false;
-        }
-    }
+    decisionMode(){}
 
     void run(){
         //Back to idle?
-        if(encoder.isPressed())
+        if(encoder.isPressed()){
             CURRENT_MODE = 0; 
+            setting_up = true;
+            gambling = false;
+            idleScreen.first_boot = true;
+            return;
+        }
         
-        setting_up = pot.getReading() > threshold;
+        if(!setting_up)
+            setting_up = pot.getReading() > threshold;
+
+        if(gambling)
+            gambling_menu();
+        else if(setting_up)
+            setting_up_menu();
+        else
+            screen.print("Levanta mi brazo\n derecho");
+    }
 
 
+    void setting_up_menu(){
+        int p = encoder.getRotation();
+        choices = constrain(choices + p, 2, 99);
+
+        screen.printCenteredTextNumber("Opciones:", choices);
+        display.print("Bajar brazo = elegir");
+        display.display();
+
+        gambling = pot.getReading() <= threshold;
+        setting_up = !gambling;
+    }
 
 
+    void gambling_menu(){
+        //Animation
+        screen.showFace(IDLE);
+        speaker.gamblingBeep();
+        screen.showFace(LOOK_RIGHT);
+        speaker.gamblingBeep();  
+        screen.showFace(LOOK_LEFT);
+        speaker.gamblingBeep();
+        screen.showFace(HAPPY);
+        speaker.successBeep();  
+
+        //Calculate & show
+        int number = random(1, choices+1);
+        screen.printCenteredTextNumber("ELEGIDO:", number); 
+        display.display();
+        delay(6000);
+
+        gambling = false;
     }
 
 };
 
-idleMode idleScreen;
+
 timerMode timerScreen;
 gameMode gameScreen;
 decisionMode decisionScreen;
@@ -383,10 +417,7 @@ void loop(){
         CURRENT_MODE = 0;
         break;
     case 3:
-        // decisionScreen.run();
-        screen.printCentered("GAMBLING MODE!");
-        delay(1000);
-        CURRENT_MODE = 0;
+        decisionScreen.run();
         break;
     default:
         break;
