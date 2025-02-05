@@ -41,11 +41,52 @@ void setup() {
 
 //===================================
 //MODE HANDLE
-String messages[] = {"Hola :D", "Sigue asi!", "No pares!", "TKM", "Juguemos?", "FOCUS!"};
+String messages[] = {"Hola :D", "Sigue asi!", "No pares!", "\tTKM", "Juguemos?", "FOCUS!"};
 int N_MESSAGES = sizeof(messages)/sizeof(messages[0]);
 
 // 0-Idle | 1-Timer | 2-Game | 3-Decision
 int CURRENT_MODE = 0;
+#define N_MODES 4
+
+struct Menu{
+    int N_OPTIONS = 0;
+    String title = "";
+    String* options;
+
+    int current=0;
+
+    Menu(){}
+
+    void init(int n, String options[], String title){
+        N_OPTIONS = n;
+        this->options = options;
+        this->title = title;
+    }
+
+    void show(){
+        display.clearDisplay();
+        int x = 0;
+        rep(i, N_OPTIONS){
+            display.setCursor(0, x);
+            if(i == current)
+                display.print("-> ");
+            display.print(options[i]);
+            x += 19;
+        }
+        display.display();
+    }
+
+    //-1 if not selected, otherwise index
+    int update(){
+        int p = encoder.getRotation();
+        current = constrain(current + p, 0, N_OPTIONS-1);
+
+        if(encoder.isPressed())
+            return current;
+        else
+            return -1;
+    }
+};
 
 struct idleMode{
     unsigned long last_change = 0;
@@ -56,12 +97,24 @@ struct idleMode{
     bool show_message = false;
     int idx = 0;
 
-    idleMode(){}
+    bool on_menu = false;
+    String options[N_MODES] = {"Volver", "Timer", "Pong", "Gambling"};
+    Menu menu;
+
+    idleMode(){
+        menu.init(4, options, "A.M.E");
+    }
+
 
     void updateRandom(){
         if(first_boot){
             first_boot = false;
             last_change = get_time();
+            return;
+        }
+
+        if(encoder.isPressed()){
+            on_menu = true;
             return;
         }
 
@@ -85,12 +138,27 @@ struct idleMode{
         }
     }
 
+
+    void menuSelector(){
+        int choice = menu.update();
+        menu.show();
+
+        if(choice != -1){
+            CURRENT_MODE = choice;
+            on_menu = false;
+        }
+    }
+
     void run(){
-        updateRandom();
-        if(show_message)
-            screen.printCentered(messages[idx]);
+        if(!on_menu){
+            updateRandom();
+            if(show_message)
+                screen.printCentered(messages[idx]);
+            else
+                screen.showFace(idx);
+        }
         else
-            screen.showFace(idx);
+            menuSelector();
     }
 };
 
@@ -150,12 +218,23 @@ void loop(){
         idleScreen.run();
         break;
     case 1:
-        timerScreen.run();
+        // timerScreen.run();
+        screen.printCentered("Timer mode!");
+        delay(1000);
+        CURRENT_MODE = 0;
         break;
     case 2:
-        gameScreen.run();
+        // gameScreen.run();
+        screen.printCentered("GAME MODE!");
+        delay(1000);
+        CURRENT_MODE = 0;
+        break;
     case 3:
-        decisionScreen.run();
+        // decisionScreen.run();
+        screen.printCentered("GAMBLING MODE!");
+        delay(1000);
+        CURRENT_MODE = 0;
+        break;
     default:
         break;
     }

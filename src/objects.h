@@ -9,6 +9,7 @@
 #include <Adafruit_SH110X.h>
 
 #include <faces.h>
+#define rep(i, n) for(int i=0; i<n; i++)
 
 //SCREEN
 #define i2c_Address 0x3c //initialize with the I2C addr 0x3C Typically eBay OLED's
@@ -68,6 +69,12 @@ struct Screen{
         delay(500);
     }
 
+    void header(String title){
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setCursor(22,0);  display.print(title);
+        display.drawLine (0,9,128,9, SH110X_WHITE);  
+    }
 
     void loading_screen(){
         for(int i=0; i<=100; i+=20){
