@@ -299,26 +299,272 @@ struct timerMode{
 };
 
 struct gameMode{
+    //Paddle
+    int paddle_high = 18;
+    int paddle_width = 3;
+
+    int l_pos = SCREEN_HEIGHT/2;
+    int r_pos = SCREEN_HEIGHT/2;
+
+    //Ball
+    int cpu_speed = 4;
+    int x_vel = 3;
+    int y_vel = 3;
+
+    int x_pos = 40;
+    int y_pos = 26;
+
+    //Scores
+    #define WINNING_SCORE 3
+    int l_score = 0;
+    int r_score = 0;
+
+    bool playing = false;
+    bool ending = false;
+
+    //Timers
+    unsigned long time_now = 0;
+    unsigned long last_change = 0;
+    unsigned long change_delay = 5000;
 
     bool on_menu = false;
-    String options[N_MODES] = {"Volver", "Timer", "Pong", "Gambling"};
+    String options[3] = {"Reanudar", "Reiniciar", "Salir"};
     Menu menu;
 
-    gameMode(){menu.init(4, options);}
+    gameMode(){menu.init(3, options);}
 
     void menuSelector(){
         int choice = menu.update();
         menu.show();
 
         if(choice != -1){
-            //DO STUFF
+            if(choice == 0){
+                on_menu = false;
+                playing = true;
+            }
+            else if(choice == 1){
+                playing = false;
+                ending = false;
+            }
+            else{
+                playing = false;
+                ending = false;
+
+                //Show sad face before leaving
+                screen.showFace(SAD);
+                speaker.sadBeep();
+                delay(1000);
+                CURRENT_MODE = 0;
+                idleScreen.first_boot = true;
+            }
             on_menu = false;
         }
     }
 
     void run(){
-        //TODO: IMPLEMENT
+        if(on_menu)
+            menuSelector();
+        else if(ending)
+            ending_menu();
+        else if(playing)
+            playing_loop();
+        else
+            start_menu();
     }
+
+
+    void start_game(){
+        //Restart all and play
+        l_score = 0;
+        r_score = 0;
+
+        x_pos = 40;
+        y_pos = 26;
+
+        l_pos = SCREEN_HEIGHT/2;
+        r_pos = SCREEN_HEIGHT/2;
+
+        playing = true;
+
+        screen.printCentered("A jugar :D");
+        speaker.successBeep();
+        delay(800);
+    }
+
+
+    void ending_menu(){
+        if(r_score == WINNING_SCORE){
+            //Bot wins
+            screen.showFace(HAPPY);
+            speaker.celebrationBeep();
+            arm.move(180);
+            speaker.celebrationBeep();
+            arm.move(0);
+            screen.showFace(LOOK_LEFT);
+            speaker.successBeep();
+            arm.move(90);
+            screen.showFace(LOOK_RIGHT);
+            speaker.successBeep();
+            arm.move(0);   
+
+            //Show message
+            screen.printCentered("TE GANEEE!");
+            delay(2500);
+        }
+        else{
+            //Bot losses
+            screen.showFace(ANGRY);
+            speaker.angryBeep();
+            arm.move(90);
+            speaker.angryBeep();
+            arm.move(0);
+            speaker.angryBeep();
+            arm.move(180);
+            screen.showFace(SAD);
+            arm.move(0);
+            speaker.sadBeep();
+
+            //Show message
+            screen.printCentered("HAS GANADO!");
+            delay(2500);
+        }
+
+        ending = false;
+        playing = false;
+    }
+
+
+    void playing_loop(){
+        //Menu?
+        if(encoder.isPressed()){
+            on_menu = true;
+            playing = false;
+            return;
+        }
+
+        //Update positions
+        l_pos = map(pot.getReading(), 0, 100, 0, SCREEN_HEIGHT-paddle_high);
+
+        //cpu
+        if(r_pos + paddle_high < y_pos)
+            r_pos = constrain(r_pos+cpu_speed, 0, SCREEN_HEIGHT-paddle_high);
+        else if(r_pos > y_pos)
+            r_pos = constrain(r_pos-cpu_speed, 0, SCREEN_HEIGHT-paddle_high);
+
+        //Write to servo
+        arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, 0, 180));
+
+
+        //Check hits on sides
+        if(x_pos > SCREEN_WIDTH-1){
+            ball_reset(false);
+            l_score = constrain(l_score+1, 0, WINNING_SCORE);
+            speaker.actionBeep();
+        }
+        else if(x_pos < 0){
+            ball_reset(true);
+            r_score = constrain(r_score+1, 0, WINNING_SCORE);
+            speaker.actionBeep();          
+        }
+
+
+        //Check hits on ceiling
+        if(y_pos > SCREEN_HEIGHT-1 || y_pos < 0)
+            y_vel = -y_vel;
+
+        //Update ball
+        x_pos += x_vel;
+        y_pos += y_vel;
+
+
+        // Draw pong elements:
+        display.clearDisplay();
+        display.fillCircle(x_pos, y_pos, 3, SH110X_WHITE);
+        display.fillRect(0, l_pos, paddle_width, paddle_high, SH110X_WHITE);
+        display.fillRect(SCREEN_WIDTH-paddle_width , r_pos, paddle_width, paddle_high, SH110X_WHITE);
+
+        // Display scores
+        display.setTextSize(1);
+        display.setTextColor(SH110X_WHITE);
+        display.setCursor(display.width()/4,0);
+        display.println(l_score);
+        display.setCursor(display.width()*3/4,0);
+        display.println(r_score);
+
+        // Display all elements
+        display.display();
+
+
+        //Check if winner
+        if(l_score >= WINNING_SCORE || r_score >= WINNING_SCORE){
+            speaker.celebrationBeep();
+            ending = true;
+            playing = false;
+            return;
+        }
+
+
+        // Check for ball bouncing into paddles:
+        if (ball_on_right_paddle() || ball_on_left_paddle()){
+            x_vel = -x_vel;
+            speaker.beep(300, 100);
+        }
+
+    }
+
+
+    int positions[4] = {0, 45, 90, 135};
+    void start_menu(){
+        if(encoder.isPressed()){
+            start_game();
+            return;
+        }
+
+        screen.printCentered("PONG");
+
+        display.setCursor(0, 50);
+        display.print("Click = comenzar");
+        display.display();
+
+        //Random movements
+        time_now = get_time();
+        if(time_now-last_change > change_delay){
+            last_change = time_now;
+            int idx = random(4);
+            arm.move(positions[idx], 30);
+        }
+
+    }
+
+
+    void ball_reset(bool left){
+        //If left is true, then ball should launch from the left, otherwise launch from the right
+        //Ball should launch at a random Y location and at a random Y velocity
+
+        y_pos = random(display.height());
+        if (random(2)>0)
+            y_vel = 1;
+        else
+            y_vel = -1;
+
+        if (left){
+            x_vel = 1;
+            x_pos = paddle_width-1;
+        }
+        else{
+            x_vel = -1;
+            x_pos = display.width()-paddle_width;  
+        }
+    }
+
+    bool ball_on_right_paddle(){
+        return(x_pos == SCREEN_WIDTH-paddle_width-1 && y_pos >= r_pos && y_pos <= (r_pos + paddle_high) && x_vel == 1);
+    }
+
+    bool ball_on_left_paddle(){
+        return(x_pos == paddle_width-1 && y_pos >= l_pos && y_pos <= (l_pos + paddle_high) && x_vel == -1);
+    }
+
 };
 
 
@@ -411,10 +657,7 @@ void loop(){
         timerScreen.run();
         break;
     case 2:
-        // gameScreen.run();
-        screen.printCentered("GAME MODE!");
-        delay(1000);
-        CURRENT_MODE = 0;
+        gameScreen.run();
         break;
     case 3:
         decisionScreen.run();

@@ -98,6 +98,31 @@ struct Speaker{
         delay(200);
     }
 
+    void sadBeep(){
+        beep(1300, 100); 
+        delay(50);
+        beep(1000, 100); 
+        delay(50);  
+        beep(700, 100);
+        delay(50);
+        beep(500, 200);
+    }
+
+    void celebrationBeep(){
+        beep(1000, 200);
+        delay(300);
+        beep(800, 300);
+        delay(300);
+        beep(600, 300);    
+    }
+
+    void angryBeep(){
+        beep(600, 100);
+        delay(50);
+        beep(800, 100);
+        delay(200);  
+    }
+
 };
 
 
