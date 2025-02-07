@@ -176,7 +176,6 @@ struct Screen{
         printCentered("Hello :D");
         display.display();
         spk->startupBeep();
-        delay(1000);
     }
 
     //FIXME: Messages showing correctly (lenght)
@@ -316,9 +315,8 @@ struct Arm{
     int pin;
     int channel;
 
-    #define RELAXED 0
-    #define POINTING 90
-    #define UPRIGHT 130
+    #define RELAXED 103
+    #define POINTING 6
 
     Arm(){}
 
@@ -329,14 +327,19 @@ struct Arm{
         pwm.attach(pin, ch);
     }
 
-    void move(int pos, int speed=70){
-        pwm.write(pin, pos, speed, 0.0);
+    void move(int pos, int speed=500){
+        int real = map(pos, 0, 100, RELAXED, POINTING);
+        pwm.write(pin, real, speed, 0.0);
     }
 };
 
 
 struct Potentiometer{
     int pin;
+
+    #define MIN_POT_POS 0
+    #define MAX_POT_POS 26
+
     Potentiometer(){}
 
     void init(int pin){
@@ -347,7 +350,7 @@ struct Potentiometer{
     //0 - 100
     int getReading(){
         int read = analogRead(pin);
-        return map(read, 0, 4095, 0, 100);
+        return map(read, 4095, 0, 0, 100);
     }
 };
 

@@ -53,6 +53,8 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(CLKPIN), updateEncoder, CHANGE);
     
     screen.loading_screen();
+    arm.move(100);
+    delay(2000);
 }
 
 //===================================
@@ -195,6 +197,7 @@ struct idleMode{
     }
 
     void run(){
+        arm.move(0);
         if(!on_menu){
             updateRandom();
             if(show_message){
@@ -306,9 +309,9 @@ struct timerMode{
             last_arm_move = time_now;
 
             if(arm_up)
-                arm.move(UPRIGHT, 90);
+                arm.move(100);
             else
-                arm.move(RELAXED, 90);
+                arm.move(0);
 
             arm_up = !arm_up;
         }
@@ -448,7 +451,7 @@ struct gameMode{
     }
 
 
-    int positions[4] = {RELAXED, (POINTING-RELAXED)/2, POINTING, UPRIGHT};
+    int positions[3] = {RELAXED, (POINTING-RELAXED)/2, POINTING};
     void startMenuSelector(){
         int choice = startMenu.update();
         start_options[1] = "Dificultad ( " + String(cpu_speed) + " )";
@@ -478,8 +481,8 @@ struct gameMode{
         time_now = get_time();
         if(time_now-last_change > change_delay){
             last_change = time_now;
-            int idx = random(4);
-            arm.move(positions[idx], 30);
+            int pos = random(0, 100);
+            arm.move(pos);
         }   
     }
 
@@ -550,15 +553,15 @@ struct gameMode{
             //Bot wins
             screen.showFace(HAPPY);
             speaker.celebrationBeep();
-            arm.move(UPRIGHT);
+            arm.move(100);
             speaker.celebrationBeep();
-            arm.move(RELAXED);
+            arm.move(0);
             screen.showFace(LOOK_LEFT);
             speaker.successBeep();
-            arm.move(POINTING);
+            arm.move(100);
             screen.showFace(LOOK_RIGHT);
             speaker.successBeep();
-            arm.move(RELAXED);   
+            arm.move(0);   
 
             //Show messages
             display.clearDisplay();
@@ -570,13 +573,13 @@ struct gameMode{
             //Bot losses
             screen.showFace(ANGRY);
             speaker.angryBeep();
-            arm.move(POINTING);
+            arm.move(100);
             speaker.angryBeep();
-            arm.move(RELAXED);
+            arm.move(0);
             speaker.angryBeep();
-            arm.move(UPRIGHT);
+            arm.move(100);
             screen.showFace(SAD);
-            arm.move(RELAXED);
+            arm.move(0);
             speaker.sadBeep();
 
             //Show message
@@ -601,7 +604,7 @@ struct gameMode{
         }
 
         //Update positions
-        l_pos = map(pot.getReading(), 0, 100, 0, SCREEN_HEIGHT-paddle_high);
+        l_pos = map(pot.getReading(), MIN_POT_POS, MAX_POT_POS, 0, SCREEN_HEIGHT-paddle_high);
 
         //cpu
 
@@ -615,7 +618,7 @@ struct gameMode{
         }
 
         //Write to servo
-        arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, RELAXED, UPRIGHT));
+        arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, 0, 100));
 
         // Check for ball bouncing into paddles:
         if (ball_on_right_paddle() || ball_on_left_paddle()){
@@ -706,7 +709,7 @@ struct gameMode{
 struct decisionMode{
     bool setting_up = false;
     bool gambling = false;
-    int threshold = 50;
+    int threshold = (MAX_POT_POS-MIN_POT_POS)/2;
     int choices = 2;
 
     /*
