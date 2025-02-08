@@ -2,21 +2,9 @@
 #include <esp_adc_cal.h>
 
 //=====================================
-//Battery
-#define BAT_ADC 2
-#define CRITICAL_VOLTAGE 3.6
-
-float getVoltage(){
-    esp_adc_cal_characteristics_t adc_chars;
-    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_12, ADC_WIDTH_BIT_12, 1100, &adc_chars);
-
-    float voltage = (esp_adc_cal_raw_to_voltage(analogRead(BAT_ADC), &adc_chars))*2;
-    return voltage/1000.0;
-}
-
-//=====================================
 
 //PINS
+#define BAT_ADC 2 //Battery
 #define SERVOPIN 10
 #define BUZZERPIN 6
 #define POTPIN 4
@@ -70,7 +58,7 @@ int N_MESSAGES = sizeof(messages)/sizeof(messages[0]);
 // 0-Idle | 1-Timer | 2-Game | 3-Decision
 int CURRENT_MODE = 0;
 bool LOW_BATTERY = false;
-#define N_MODES 4
+#define N_MODES 5
 
 struct Menu{
     int N_OPTIONS = 0;
@@ -95,7 +83,7 @@ struct Menu{
             if(i == current)
                 display.print("-> ");
             display.print(options[i]);
-            x += 19;
+            x += 16;
         }
         display.display();
     }
@@ -122,11 +110,11 @@ struct idleMode{
     int idx = 0;
 
     bool on_menu = false;
-    String options[N_MODES] = {"Volver", "Timer", "Pong", "Gambling"};
+    String options[N_MODES] = {"Volver", "Battery check", "Timer", "Pong", "Gambling"};
     Menu menu;
 
     idleMode(){
-        menu.init(4, options);
+        menu.init(5, options);
     }
 
 
@@ -174,14 +162,14 @@ struct idleMode{
             on_menu = false;
 
             //Easter eggs
-            if(CURRENT_MODE == 2){
+            if(CURRENT_MODE == 3){
                 display.clearDisplay();
                 screen.printCentered("PONG");
                 display.display();
                 speaker.successBeep();
                 delay(800);
             }
-            if(CURRENT_MODE == 3){
+            if(CURRENT_MODE == 4){
                 display.clearDisplay();
                 screen.moveCursor(15, screen.centerY);
                 screen.print("LET'S GO GAMBLING");
@@ -214,6 +202,93 @@ struct idleMode{
 };
 
 idleMode idleScreen;
+
+
+//============================================
+//Battery related
+#define CRITICAL_VOLTAGE 3.6
+#define MAX_VOLTAGE 4.2
+#define BATTERY_MODE_VOLTAGE 4.1
+
+float CURRENT_VOLTAGE = 4.2;
+bool BATTERY_MODE = false;
+
+esp_adc_cal_characteristics_t adc_chars;
+bool battery_initialized = false;
+
+float getVoltage(){
+    if(!battery_initialized){
+        battery_initialized = true;
+        esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_12, ADC_WIDTH_BIT_12, 1100, &adc_chars);
+    }
+    
+    float voltage = (esp_adc_cal_raw_to_voltage(analogRead(BAT_ADC), &adc_chars))*2;
+    voltage /= 1000.0;
+
+    if(abs(CURRENT_VOLTAGE-voltage) > 0.5)
+        return CURRENT_VOLTAGE; //Avoid spikes of noise
+    else
+        return voltage;
+}
+
+
+struct batteryCheckMenu{
+    float charge_percentage = 0.0;
+
+    batteryCheckMenu(){}
+
+    void run(){
+        //Back to idle?
+        if(encoder.isPressed()){
+            CURRENT_MODE = 0; 
+            idleScreen.first_boot = true;
+            return;
+        }
+        
+        charge_percentage = map(CURRENT_VOLTAGE, CRITICAL_VOLTAGE, MAX_VOLTAGE, 0.0, 100.0);
+        display.clearDisplay();
+        screen.header("Nivel de bateria");
+        display.setCursor(screen.centerX-(String(charge_percentage).length()*5)+15, screen.centerY);
+        screen.print(String(charge_percentage), 2);
+        screen.print("%", 2);
+        display.display();
+    }
+
+};
+
+struct lowBatteryMenu{
+    unsigned long time_now=0;
+    unsigned long last_warning=0;
+    unsigned long warning_delay = 180000;
+    bool first_time = true;
+
+    lowBatteryMenu(){}
+
+    void run(){
+        if(first_time){
+            display.clearDisplay();
+            screen.printCentered("Poca bateria :(");
+            screen.moveCursor(-1, display.getCursorY()+20);
+            screen.printCentered("( cargame )", 1, false);
+            display.display();
+            first_time = false;
+            speaker.sadBeep();
+        }
+
+        time_now = get_time();
+        if(time_now-last_warning<=warning_delay)
+            return;
+
+        last_warning = time_now;
+        speaker.sadBeep();
+
+    }
+
+};
+
+batteryCheckMenu batteryCheckScreen;
+lowBatteryMenu lowBatteryScreen;
+//===================================
 
 
 struct timerMode{
@@ -476,14 +551,6 @@ struct gameMode{
             }
             on_menu = false;
         }   
-
-        //Random movements
-        time_now = get_time();
-        if(time_now-last_change > change_delay){
-            last_change = time_now;
-            int pos = random(0, 100);
-            arm.move(pos);
-        }   
     }
 
 
@@ -604,7 +671,7 @@ struct gameMode{
         }
 
         //Update positions
-        l_pos = map(pot.getReading(), MIN_POT_POS, MAX_POT_POS, 0, SCREEN_HEIGHT-paddle_high);
+        l_pos = map(pot.getReading(), MAX_POT_POS, MIN_POT_POS, 0, SCREEN_HEIGHT-paddle_high);
 
         //cpu
 
@@ -618,7 +685,8 @@ struct gameMode{
         }
 
         //Write to servo
-        arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, 0, 100));
+        if(!BATTERY_MODE)
+            arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, 100, 0));
 
         // Check for ball bouncing into paddles:
         if (ball_on_right_paddle() || ball_on_left_paddle()){
@@ -696,11 +764,11 @@ struct gameMode{
     }
 
     bool ball_on_right_paddle(){
-        return(x_pos+x_vel >= (SCREEN_WIDTH-paddle_width-1) && y_pos >= r_pos && y_pos <= (r_pos + paddle_high));
+        return((x_pos+x_vel) >= (SCREEN_WIDTH-paddle_width-1) && y_pos >= r_pos && y_pos <= (r_pos + paddle_high));
     }
 
     bool ball_on_left_paddle(){
-        return(x_pos+x_vel <= paddle_width+1 && y_pos >= l_pos && y_pos <= (l_pos + paddle_high));
+        return((x_pos+x_vel) <= paddle_width+1 && y_pos >= l_pos && y_pos <= (l_pos + paddle_high));
     }
 
 };
@@ -796,51 +864,19 @@ decisionMode decisionScreen;
 
 //===================================
 
-struct lowBatteryMenu{
-    unsigned long time_now=0;
-    unsigned long last_warning=0;
-    unsigned long warning_delay = 180000;
-    bool first_time = true;
-
-    lowBatteryMenu(){}
-
-    void run(){
-        if(first_time){
-            display.clearDisplay();
-            screen.printCentered("Poca bateria :(");
-            screen.moveCursor(-1, display.getCursorY()+20);
-            screen.printCentered("( cargame )", 1, false);
-            display.display();
-            first_time = false;
-            speaker.sadBeep();
-        }
-
-        time_now = get_time();
-        if(time_now-last_warning<=warning_delay)
-            return;
-
-        last_warning = time_now;
-        speaker.sadBeep();
-
-    }
-
-};
-
-lowBatteryMenu lowBatteryScreen;
-//===================================
-
-float v;
 void loop(){
     //Check battery
-    v = getVoltage();
-    if(v <= CRITICAL_VOLTAGE && !LOW_BATTERY){
+    CURRENT_VOLTAGE = getVoltage();
+    if(CURRENT_VOLTAGE <= CRITICAL_VOLTAGE && !LOW_BATTERY){
         LOW_BATTERY = true;
         lowBatteryScreen.first_time = true;
     }
-    else if(v >= CRITICAL_VOLTAGE && LOW_BATTERY)
+    else if(CURRENT_VOLTAGE >= CRITICAL_VOLTAGE && LOW_BATTERY)
         LOW_BATTERY = false;
-    
 
+    //Activate battery mode
+    BATTERY_MODE = (CURRENT_VOLTAGE < BATTERY_MODE_VOLTAGE);
+    
     if(LOW_BATTERY){
         lowBatteryScreen.run();
         delay(100);
@@ -853,12 +889,15 @@ void loop(){
         idleScreen.run();
         break;
     case 1:
-        timerScreen.run();
+        batteryCheckScreen.run();
         break;
     case 2:
-        gameScreen.run();
+        timerScreen.run();
         break;
     case 3:
+        gameScreen.run();
+        break;
+    case 4:
         decisionScreen.run();
         break;
     default:

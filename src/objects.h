@@ -173,7 +173,7 @@ struct Screen{
         }
 
         display.clearDisplay();
-        printCentered("Hello :D");
+        printCentered("A . M . E");
         display.display();
         spk->startupBeep();
     }
