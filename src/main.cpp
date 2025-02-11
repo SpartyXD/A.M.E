@@ -45,21 +45,8 @@ void setup() {
     delay(2000);
 }
 
-//===================================
-//MODE HANDLE
-String messages[] = {
-    "Hola :D", "Sigue asi!", "No pares!",
-    "TKM :)", "Juguemos?", "FOCUS!",
-    "Persiste", "SLAY", "Cuenta conmigo",
-    "No pivote?", "Miedo al exito?", "Apunta alto"};
-
-int N_MESSAGES = sizeof(messages)/sizeof(messages[0]);
-
-// 0-Idle | 1-Timer | 2-Game | 3-Decision
-int CURRENT_MODE = 0;
-bool LOW_BATTERY = false;
-#define N_MODES 5
-
+//==================================
+//Menu handling
 struct Menu{
     int N_OPTIONS = 0;
     int MAX_OPTIONS = 4;
@@ -78,13 +65,21 @@ struct Menu{
         display.clearDisplay();
         display.setTextSize(1);
         int x = 0;
-        for(int i=current/MAX_OPTIONS; i< min((current/MAX_OPTIONS)+MAX_OPTIONS, N_OPTIONS); i++){
+        int i=0;
+        for(i=current/MAX_OPTIONS; i < min((current/MAX_OPTIONS)+MAX_OPTIONS, N_OPTIONS); i++){
             display.setCursor(0, x);
             if(i == current)
                 display.print("-> ");
             display.print(options[i]);
             x += 16;
         }
+
+        //Check if the menu can be scrolled..
+        if(i < N_OPTIONS){
+            display.fillRect(115, 40, 8, 16, SH110X_WHITE);
+            display.fillTriangle(110, 56, 128, 56, 119, 62, SH110X_WHITE);
+        }
+
         display.display();
     }
 
@@ -99,6 +94,59 @@ struct Menu{
             return -1;
     }
 };
+
+//===================================
+//POWER OFF MODE
+bool POWER_ON = true;
+
+struct powerOffMode{
+    bool first_time = true;
+
+    powerOffMode(){}
+
+    void turn_off_all(){
+        display.clearDisplay();
+        display.display();
+        arm.move(0);
+    }
+
+    void wake_up(){
+        screen.loading_screen();
+        arm.move(100);
+        delay(2000);
+        POWER_ON = true;
+    }
+
+    void run(){
+        if(first_time){
+            turn_off_all();
+            first_time = false;
+        }
+
+        //Check if reactivated (long press)
+        if(encoder.isPressed() == 3){
+            wake_up();
+            first_time = true;
+        }
+    }
+
+};
+
+powerOffMode powerOffScreen;
+//===================================
+//Idle mode
+String messages[] = {
+    "Hola :D", "Sigue asi!", "No pares!",
+    "TKM :)", "Juguemos?", "FOCUS!",
+    "Persiste", "SLAY", "Cuenta conmigo",
+    "No pivote?", "Miedo al exito?", "Apunta alto"};
+
+int N_MESSAGES = sizeof(messages)/sizeof(messages[0]);
+
+// 0-Idle | 1-Timer | 2-Game | 3-Decision
+int CURRENT_MODE = 0;
+bool LOW_BATTERY = false;
+#define N_MODES 5
 
 struct idleMode{
     unsigned long last_change = 0;
@@ -126,7 +174,7 @@ struct idleMode{
             last_change = get_time();
             return;
         }
-
+        
         if(encoder.isPressed()){
             on_menu = true;
             return;
@@ -185,6 +233,16 @@ struct idleMode{
     }
 
     void run(){
+        //Check if want to power off (Long press)
+        if(encoder.isPressed() == 3){
+            POWER_ON = false;
+            display.clearDisplay();
+            screen.printCentered("Good Bye :p");
+            display.display();
+            speaker.sadBeep();
+            return;
+        }
+
         arm.move(0);
         if(!on_menu){
             updateRandom();
@@ -232,6 +290,7 @@ float getVoltage(){
 }
 
 
+
 struct batteryCheckMenu{
     float charge_percentage = 0.0;
 
@@ -271,8 +330,8 @@ struct lowBatteryMenu{
             screen.moveCursor(-1, display.getCursorY()+20);
             screen.printCentered("( cargame )", 1, false);
             display.display();
-            first_time = false;
             speaker.sadBeep();
+            first_time = false;
         }
 
         time_now = get_time();
@@ -288,6 +347,7 @@ struct lowBatteryMenu{
 
 batteryCheckMenu batteryCheckScreen;
 lowBatteryMenu lowBatteryScreen;
+
 //===================================
 
 
@@ -882,6 +942,14 @@ void loop(){
         delay(100);
         return;
     }
+
+
+    //Is powered off?
+    if(!POWER_ON){
+        powerOffScreen.run();
+        return;
+    }
+
 
     //Normal behaviour
     switch (CURRENT_MODE){

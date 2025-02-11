@@ -253,10 +253,13 @@ struct Encoder{
     volatile bool* encoderDirection; //True = right
 
     //Debounce
+    #define LONG_PRESS_TIME 3500
     unsigned long debounce = 50;
+    unsigned long last_press_time = 0;
     unsigned long last_check = 0;
     unsigned long time_now = 0;
     bool last_state = HIGH;
+    bool pressed = false;
 
     Encoder(){}
 
@@ -275,24 +278,41 @@ struct Encoder{
     }
 
     //Is switch pressed?
-    bool isPressed(){
+    // 0-No | 2-Short | 3-Long
+    int isPressed(){
         time_now = get_time();
 
         if(time_now-last_check <= debounce)
-            return false;
-
+            return 0;
+        
         last_check = time_now;
         swState = digitalRead(swpin);
 
-        if(swState == LOW && last_state == HIGH){
+        //Check which press it is
+        if(!pressed && swState == LOW && last_state == HIGH){
+            //First time press
             spk->actionBeep();
-            last_state = LOW;
-            return true;
+            pressed = true;
+            last_press_time = time_now;
+        }
+        else if(pressed && swState == HIGH){
+            //Short pressed
+            pressed = false;
+            last_state = swState;
+            return 2;
+        }
+        else if(pressed && (time_now-last_press_time >= LONG_PRESS_TIME)){
+            //Long press
+            pressed = false;
+            last_state = swState;
+            spk->beep(1000, 100);
+            return 3;  
         }
 
         last_state = swState;
-        return false;
+        return 0;
     }
+
 
     //-1 = left | 0 = still | 1 = right
     //Detect encoder rotation
