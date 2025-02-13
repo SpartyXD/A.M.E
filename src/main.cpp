@@ -32,7 +32,11 @@ Potentiometer pot;
 
 //===================================
 
+#define DEBG_MODE false
+
 void setup() {
+    if(DEBG_MODE)
+        Serial.begin(115200);
     speaker.init(BUZZERPIN, 2);
     arm.init(SERVOPIN, 0);
     screen.init(speaker);
@@ -41,7 +45,6 @@ void setup() {
     attachInterrupt(digitalPinToInterrupt(CLKPIN), updateEncoder, CHANGE);
     
     screen.loading_screen();
-    arm.move(100);
     delay(2000);
 }
 
@@ -66,7 +69,7 @@ struct Menu{
         display.setTextSize(1);
         int x = 0;
         int i=0;
-        for(i=current/MAX_OPTIONS; i < min((current/MAX_OPTIONS)+MAX_OPTIONS, N_OPTIONS); i++){
+        for(i=current; i < min(int(current+MAX_OPTIONS), int(N_OPTIONS)); i++){
             display.setCursor(0, x);
             if(i == current)
                 display.print("-> ");
@@ -112,8 +115,6 @@ struct powerOffMode{
 
     void wake_up(){
         screen.loading_screen();
-        arm.move(100);
-        delay(2000);
         POWER_ON = true;
     }
 
@@ -123,8 +124,8 @@ struct powerOffMode{
             first_time = false;
         }
 
-        //Check if reactivated (long press)
-        if(encoder.isPressed() == 3){
+        //Check if reactivated
+        if(encoder.isPressed()){
             wake_up();
             first_time = true;
         }
@@ -143,10 +144,9 @@ String messages[] = {
 
 int N_MESSAGES = sizeof(messages)/sizeof(messages[0]);
 
-// 0-Idle | 1-Timer | 2-Game | 3-Decision
-int CURRENT_MODE = 0;
+// Idle | Battery check | Timer | Pong | Gambling | APAGAR
+String CURRENT_MODE = "Idle";
 bool LOW_BATTERY = false;
-#define N_MODES 5
 
 struct idleMode{
     unsigned long last_change = 0;
@@ -158,11 +158,11 @@ struct idleMode{
     int idx = 0;
 
     bool on_menu = false;
-    String options[N_MODES] = {"Volver", "Battery check", "Timer", "Pong", "Gambling"};
+    String options[6] = {"Volver", "Battery check", "Timer", "Pong", "Gambling", "APAGAR"};
     Menu menu;
 
     idleMode(){
-        menu.init(5, options);
+        menu.init(6, options);
     }
 
 
@@ -172,6 +172,7 @@ struct idleMode{
             idx = 0;
             show_message = false;
             last_change = get_time();
+            arm.move(0);
             return;
         }
         
@@ -206,18 +207,19 @@ struct idleMode{
         menu.show();
 
         if(choice != -1){
-            CURRENT_MODE = choice;
+            CURRENT_MODE = options[choice];
             on_menu = false;
 
-            //Easter eggs
-            if(CURRENT_MODE == 3){
+            if(CURRENT_MODE == "Volver")
+                CURRENT_MODE = "Idle";
+            else if(CURRENT_MODE == "Pong"){
                 display.clearDisplay();
                 screen.printCentered("PONG");
                 display.display();
                 speaker.successBeep();
                 delay(800);
             }
-            if(CURRENT_MODE == 4){
+            else if(CURRENT_MODE == "Gambling"){
                 display.clearDisplay();
                 screen.moveCursor(15, screen.centerY);
                 screen.print("LET'S GO GAMBLING");
@@ -229,21 +231,20 @@ struct idleMode{
                 delay(50);
                 speaker.successBeep();
             }
+
+            //Turn off screen
+            if(CURRENT_MODE == "APAGAR"){
+                POWER_ON = false;
+                display.clearDisplay();
+                screen.printCentered("Good Bye :p");
+                display.display();
+                speaker.sadBeep();
+                CURRENT_MODE = "Idle";
+            }
         }
     }
 
     void run(){
-        //Check if want to power off (Long press)
-        if(encoder.isPressed() == 3){
-            POWER_ON = false;
-            display.clearDisplay();
-            screen.printCentered("Good Bye :p");
-            display.display();
-            speaker.sadBeep();
-            return;
-        }
-
-        arm.move(0);
         if(!on_menu){
             updateRandom();
             if(show_message){
@@ -299,7 +300,7 @@ struct batteryCheckMenu{
     void run(){
         //Back to idle?
         if(encoder.isPressed()){
-            CURRENT_MODE = 0; 
+            CURRENT_MODE = "Idle"; 
             idleScreen.first_boot = true;
             return;
         }
@@ -404,7 +405,7 @@ struct timerMode{
                 running = false;
             }
             else{
-                CURRENT_MODE = 0; //back to idle
+                CURRENT_MODE = "Idle"; //back to idle
                 idleScreen.first_boot = true;
                 setting = true;
                 running = false;
@@ -533,7 +534,8 @@ struct gameMode{
     int y_pos = 26;
 
     //Scores
-    #define WINNING_SCORE 3
+    int WINNING_SCORE = 3;
+    #define MAX_SCORE 20
     #define MAX_DIF 5
     int l_score = 0;
     int r_score = 0;
@@ -541,6 +543,7 @@ struct gameMode{
     bool playing = false;
     bool ending = false;
     bool choosing_dif = false;
+    bool choosing_points = false;
 
     //Timers
     unsigned long time_now = 0;
@@ -549,13 +552,13 @@ struct gameMode{
 
     bool on_menu = false;
     String options[3] = {"Reanudar", "Reiniciar", "Salir"};
-    String start_options[3] = {"Jugar!", "Dificultad", "Salir"};
+    String start_options[4] = {"Jugar!", "Dificultad", "Cant. Rondas", "Salir"};
     Menu menu;
     Menu startMenu;
 
     gameMode(){
         menu.init(3, options);
-        startMenu.init(3, start_options);
+        startMenu.init(4, start_options);
     }
 
     void menuSelector(){
@@ -578,7 +581,7 @@ struct gameMode{
                 screen.showFace(SAD);
                 speaker.sadBeep();
                 delay(1000);
-                CURRENT_MODE = 0;
+                CURRENT_MODE = "Idle";
                 idleScreen.first_boot = true;
             }
             on_menu = false;
@@ -586,10 +589,10 @@ struct gameMode{
     }
 
 
-    int positions[3] = {RELAXED, (POINTING-RELAXED)/2, POINTING};
     void startMenuSelector(){
         int choice = startMenu.update();
         start_options[1] = "Dificultad ( " + String(cpu_speed) + " )";
+        start_options[2] = "Cant. rondas ( " + String(WINNING_SCORE) + " )";
         startMenu.show();
 
         if(choice != -1){
@@ -600,13 +603,21 @@ struct gameMode{
                 choosing_dif = true;
                 playing = false;
                 ending = false;
+                choosing_points = false;
+            }
+            else if(choice == 2){
+                choosing_points = true;
+                choosing_dif = false;
+                playing = false;
+                ending = false;
             }
             else{
                 playing = false;
                 ending = false;
                 choosing_dif = false;
+                choosing_points = false;
 
-                CURRENT_MODE = 0;
+                CURRENT_MODE = "Idle";
                 idleScreen.first_boot = true;
             }
             on_menu = false;
@@ -649,8 +660,31 @@ struct gameMode{
             ending_menu();
         else if(playing)
             playing_loop();
+        else if(choosing_points)
+            point_menu();
         else
             startMenuSelector();
+    }
+
+
+    void point_menu(){
+        if(encoder.isPressed()){
+            choosing_points = false;
+            return;
+        }
+
+        WINNING_SCORE += encoder.getRotation();
+        WINNING_SCORE = constrain(WINNING_SCORE, 1, MAX_SCORE);
+
+        screen.printCenteredTextNumber("Cant. rondas:", WINNING_SCORE);
+
+        //Easter egg
+        if(WINNING_SCORE == MAX_SCORE){
+            screen.moveCursor(screen.centerX-10, 50);
+            screen.print("( INSANO )");
+        }
+        
+        display.display();     
     }
 
 
@@ -745,8 +779,7 @@ struct gameMode{
         }
 
         //Write to servo
-        if(!BATTERY_MODE)
-            arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, 100, 0));
+        arm.move(map(r_pos, 0, SCREEN_HEIGHT-paddle_high, 100, 0));
 
         // Check for ball bouncing into paddles:
         if (ball_on_right_paddle() || ball_on_left_paddle()){
@@ -853,7 +886,7 @@ struct decisionMode{
     void run(){
         //Back to idle?
         if(encoder.isPressed()){
-            CURRENT_MODE = 0; 
+            CURRENT_MODE = "Idle"; 
             setting_up = true;
             gambling = false;
             idleScreen.first_boot = true;
@@ -936,6 +969,7 @@ void loop(){
 
     //Activate battery mode
     BATTERY_MODE = (CURRENT_VOLTAGE < BATTERY_MODE_VOLTAGE);
+    arm.ACTIVE_ARM = !BATTERY_MODE;
     
     if(LOW_BATTERY){
         lowBatteryScreen.run();
@@ -952,25 +986,16 @@ void loop(){
 
 
     //Normal behaviour
-    switch (CURRENT_MODE){
-    case 0:
+    if(CURRENT_MODE == "Idle")
         idleScreen.run();
-        break;
-    case 1:
+    else if(CURRENT_MODE == "Battery check")
         batteryCheckScreen.run();
-        break;
-    case 2:
+    else if(CURRENT_MODE == "Timer")
         timerScreen.run();
-        break;
-    case 3:
+    else if(CURRENT_MODE == "Pong")
         gameScreen.run();
-        break;
-    case 4:
+    else if(CURRENT_MODE == "Gambling")
         decisionScreen.run();
-        break;
-    default:
-        break;
-    }
-
+    
     delay(20);
 }

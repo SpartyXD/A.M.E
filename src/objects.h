@@ -253,13 +253,10 @@ struct Encoder{
     volatile bool* encoderDirection; //True = right
 
     //Debounce
-    #define LONG_PRESS_TIME 3500
     unsigned long debounce = 50;
-    unsigned long last_press_time = 0;
     unsigned long last_check = 0;
     unsigned long time_now = 0;
     bool last_state = HIGH;
-    bool pressed = false;
 
     Encoder(){}
 
@@ -278,41 +275,24 @@ struct Encoder{
     }
 
     //Is switch pressed?
-    // 0-No | 2-Short | 3-Long
-    int isPressed(){
+    bool isPressed(){
         time_now = get_time();
 
         if(time_now-last_check <= debounce)
-            return 0;
-        
+            return false;
+
         last_check = time_now;
         swState = digitalRead(swpin);
 
-        //Check which press it is
-        if(!pressed && swState == LOW && last_state == HIGH){
-            //First time press
+        if(swState == LOW && last_state == HIGH){
             spk->actionBeep();
-            pressed = true;
-            last_press_time = time_now;
-        }
-        else if(pressed && swState == HIGH){
-            //Short pressed
-            pressed = false;
-            last_state = swState;
-            return 2;
-        }
-        else if(pressed && (time_now-last_press_time >= LONG_PRESS_TIME)){
-            //Long press
-            pressed = false;
-            last_state = swState;
-            spk->beep(1000, 100);
-            return 3;  
+            last_state = LOW;
+            return true;
         }
 
         last_state = swState;
-        return 0;
+        return false;
     }
-
 
     //-1 = left | 0 = still | 1 = right
     //Detect encoder rotation
@@ -334,6 +314,7 @@ struct Encoder{
 struct Arm{
     int pin;
     int channel;
+    bool ACTIVE_ARM = true;
 
     #define RELAXED 103
     #define POINTING 6
@@ -348,6 +329,8 @@ struct Arm{
     }
 
     void move(int pos, int speed=500){
+        if(!ACTIVE_ARM)
+            return;
         int real = map(pos, 0, 100, RELAXED, POINTING);
         pwm.write(pin, real, speed, 0.0);
     }
