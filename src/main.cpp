@@ -1,5 +1,6 @@
 #include <objects.h>
 #include <esp_adc_cal.h>
+#include <birthday.h>
 
 //=====================================
 
@@ -29,6 +30,7 @@ Arm arm;
 Speaker speaker;
 Encoder encoder;
 Potentiometer pot;
+HappyBday bday;
 
 //===================================
 
@@ -38,6 +40,8 @@ void setup() {
     if(DEBG_MODE)
         Serial.begin(115200);
     speaker.init(BUZZERPIN, 2);
+    bday.init(speaker);
+    
     arm.init(SERVOPIN, 0);
     screen.init(speaker);
     pot.init(POTPIN);
@@ -158,7 +162,7 @@ struct idleMode{
     int idx = 0;
 
     bool on_menu = false;
-    String options[6] = {"Volver", "Battery check", "Timer", "Pong", "Gambling", "APAGAR"};
+    String options[6] = {"Volver", "Feliz cumple", "Timer", "Pong", "Gambling", "APAGAR"};
     Menu menu;
 
     idleMode(){
@@ -960,12 +964,12 @@ decisionMode decisionScreen;
 void loop(){
     //Check battery
     CURRENT_VOLTAGE = getVoltage();
-    if(CURRENT_VOLTAGE <= CRITICAL_VOLTAGE && !LOW_BATTERY){
-        LOW_BATTERY = true;
-        lowBatteryScreen.first_time = true;
-    }
-    else if(CURRENT_VOLTAGE >= CRITICAL_VOLTAGE && LOW_BATTERY)
-        LOW_BATTERY = false;
+    // if(CURRENT_VOLTAGE <= CRITICAL_VOLTAGE && !LOW_BATTERY){
+    //     LOW_BATTERY = true;
+    //     lowBatteryScreen.first_time = true;
+    // }
+    // else if(CURRENT_VOLTAGE >= CRITICAL_VOLTAGE && LOW_BATTERY)
+    //     LOW_BATTERY = false;
 
     //Activate battery mode
     BATTERY_MODE = (CURRENT_VOLTAGE < BATTERY_MODE_VOLTAGE);
@@ -988,8 +992,24 @@ void loop(){
     //Normal behaviour
     if(CURRENT_MODE == "Idle")
         idleScreen.run();
-    else if(CURRENT_MODE == "Battery check")
-        batteryCheckScreen.run();
+    else if(CURRENT_MODE == "Feliz cumple"){
+        screen.clear();
+        screen.printCentered("Feliz cumple :D");
+        screen.show();
+        bday.run();
+        CURRENT_MODE = "Idle";
+        screen.showFace(HAPPY);
+        delay(1500);
+        screen.clear();
+        screen.printCentered("Con cariño");
+        screen.show();
+        speaker.successBeep();
+        delay(900);
+        screen.clear();
+        screen.printCentered("By Mati :)");
+        screen.show();
+        delay(1000);
+    }
     else if(CURRENT_MODE == "Timer")
         timerScreen.run();
     else if(CURRENT_MODE == "Pong")
