@@ -1,7 +1,7 @@
 # A.M.E BOT
 Robot de compañia tanto para estudiar como para jugar.
 
-La idea inicial surgio debido a que era el cumple de mi mejor amiga y no sabia que regalarle, asi que dije: "Por que no le armo un robot?" jskdjs
+El robot lo hice como regalo para mi mejor amiga en su cumple :D
 
 ## Proceso de desarrollo
 El robot fue modelado y armado en 1 semana aprox, con ayuda de buenas dosis de azucar y sus buenas trasnochadas :D
@@ -11,6 +11,16 @@ El robot fue modelado y armado en 1 semana aprox, con ayuda de buenas dosis de a
 ![Mockups iniciales del robot](https://github.com/user-attachments/assets/9903c608-9f89-4afa-b77a-d2a0b1c458d2)
 
 ![Circuiteria interna robot](https://github.com/user-attachments/assets/3d10ab85-f5f2-4d05-95e1-1b0f57292e02)
+
+## Componentes
+* Esp32 TTGO T-OI Plus
+* Headers / Perfboards / Cables
+* Encoder rotatorio KY-040 360 grados
+* Pantalla OLED SH1106 128x64
+* Potenciometro 20k
+* Buzzer pasivo
+* Servomotor MG90S Metalico
+* Tornillos M3 y M2
 
 ## Implementacion del codigo
 El codigo esta listo para implementarse como proyecto en PlatformIO (extension de Visual studio code) y 
